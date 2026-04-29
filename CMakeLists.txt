@@ -1,0 +1,61 @@
+cmake_minimum_required(VERSION 3.20)
+set(CMAKE_C_COMPILER clang)
+set(CMAKE_CXX_COMPILER clang++)
+project(iboot C CXX ASM)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+set(IBOOT_INCLUDE_DIRS
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/UEFI"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/UEFI/X64"
+)
+
+add_library(iboot_headers INTERFACE)
+add_library(iboot::headers ALIAS iboot_headers)
+
+target_include_directories(iboot_headers INTERFACE
+    ${IBOOT_INCLUDE_DIRS}
+)
+
+file(GLOB BOOT_SOURCES src/*.cpp)
+
+add_executable(BOOTX64.EFI ${BOOT_SOURCES})
+
+target_include_directories(BOOTX64.EFI PRIVATE
+    ${IBOOT_INCLUDE_DIRS}
+)
+
+target_compile_options(BOOTX64.EFI PRIVATE
+    ${BASE_CXX_FLAGS}
+    ${UEFI_CXX_FLAGS}
+)
+
+target_link_options(BOOTX64.EFI PRIVATE
+    ${EFI_LINK_OPTIONS}
+    -Wl,-subsystem:efi_application
+    -Wl,-entry:iboot
+)
+
+set_target_properties(BOOTX64.EFI PROPERTIES SUFFIX "")
+
+set(IBOOT_EFI_TARGET BOOTX64.EFI)
+set(IBOOT_EFI_FILE "$<TARGET_FILE:BOOTX64.EFI>")
+set(IBOOT_LIBRARIES BOOTX64.EFI iboot_headers)
+
+if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(IBOOT_INCLUDE_DIRS ${IBOOT_INCLUDE_DIRS} PARENT_SCOPE)
+    set(IBOOT_EFI_TARGET ${IBOOT_EFI_TARGET} PARENT_SCOPE)
+    set(IBOOT_EFI_FILE ${IBOOT_EFI_FILE} PARENT_SCOPE)
+    set(IBOOT_LIBRARIES ${IBOOT_LIBRARIES} PARENT_SCOPE)
+endif()
+
+add_custom_target(copy ALL
+    DEPENDS BOOTX64.EFI
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${ISO_EFI_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/BOOTX64.EFI" "${ISO_EFI_DIR}/BOOTX64.EFI"
+)
