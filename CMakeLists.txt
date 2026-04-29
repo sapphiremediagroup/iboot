@@ -1,6 +1,4 @@
 cmake_minimum_required(VERSION 3.20)
-set(CMAKE_C_COMPILER clang)
-set(CMAKE_CXX_COMPILER clang++)
 project(iboot C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -52,10 +50,13 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(IBOOT_EFI_TARGET ${IBOOT_EFI_TARGET} PARENT_SCOPE)
     set(IBOOT_EFI_FILE ${IBOOT_EFI_FILE} PARENT_SCOPE)
     set(IBOOT_LIBRARIES ${IBOOT_LIBRARIES} PARENT_SCOPE)
-endif()
+else()
+    set(ISO_ROOT ${CMAKE_BINARY_DIR}/iso)
+    set(ISO_EFI_DIR ${ISO_ROOT}/EFI/BOOT)
 
-add_custom_target(copy ALL
-    DEPENDS BOOTX64.EFI
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${ISO_EFI_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/BOOTX64.EFI" "${ISO_EFI_DIR}/BOOTX64.EFI"
-)
+    add_custom_target(copy-bootloader ALL
+        DEPENDS BOOTX64.EFI
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${ISO_EFI_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/BOOTX64.EFI" "${ISO_EFI_DIR}/BOOTX64.EFI"
+    )
+endif()
