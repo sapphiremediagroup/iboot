@@ -31,9 +31,11 @@ target_include_directories(BOOTX64.EFI PRIVATE
 target_compile_options(BOOTX64.EFI PRIVATE
     ${BASE_CXX_FLAGS}
     ${UEFI_CXX_FLAGS}
+    ${SIZE_CXX_FLAGS}
 )
 
 target_link_options(BOOTX64.EFI PRIVATE
+    ${SIZE_LINK_OPTIONS}
     ${EFI_LINK_OPTIONS}
     -Wl,-subsystem:efi_application
     -Wl,-entry:iboot
