@@ -14,6 +14,66 @@ static EFI_GUID gEfiSimpleFileSystemProtocolGuid  = EFI_SIMPLE_FILE_SYSTEM_PROTO
 static EFI_GUID gEfiFileInfoGuid                  = EFI_FILE_INFO_ID;
 static EFI_GUID gEfiGraphicsOutputProtocolGuid    = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
 
+namespace {
+constexpr UINT32 kPreferredFramebufferWidth = 1280;
+constexpr UINT32 kPreferredFramebufferHeight = 720;
+
+bool Is16By9(UINT32 width, UINT32 height) {
+    return height != 0 && width * 9 == height * 16;
+}
+
+void Prefer16By9Framebuffer(EFI_SYSTEM_TABLE* st, EFI_GRAPHICS_OUTPUT_PROTOCOL* gop) {
+    if (!gop || !gop->Mode) {
+        return;
+    }
+
+    UINT32 bestMode = gop->Mode->Mode;
+    UINT32 bestWidth = gop->Mode->Info ? gop->Mode->Info->HorizontalResolution : 0;
+    UINT32 bestHeight = gop->Mode->Info ? gop->Mode->Info->VerticalResolution : 0;
+    bool foundPreferred = false;
+    bool found16By9 = Is16By9(bestWidth, bestHeight);
+
+    for (UINT32 modeIndex = 0; modeIndex < gop->Mode->MaxMode; ++modeIndex) {
+        EFI_GRAPHICS_OUTPUT_MODE_INFORMATION* info = nullptr;
+        UINTN infoSize = 0;
+        EFI_STATUS status = gop->QueryMode(gop, modeIndex, &infoSize, &info);
+        if (EFI_ERROR(status) || !info) {
+            continue;
+        }
+
+        const UINT32 width = info->HorizontalResolution;
+        const UINT32 height = info->VerticalResolution;
+        if (width == kPreferredFramebufferWidth && height == kPreferredFramebufferHeight) {
+            bestMode = modeIndex;
+            bestWidth = width;
+            bestHeight = height;
+            foundPreferred = true;
+        } else if (!foundPreferred && Is16By9(width, height)) {
+            const UINT64 pixels = static_cast<UINT64>(width) * height;
+            const UINT64 bestPixels = static_cast<UINT64>(bestWidth) * bestHeight;
+            if (!found16By9 || pixels > bestPixels) {
+                bestMode = modeIndex;
+                bestWidth = width;
+                bestHeight = height;
+                found16By9 = true;
+            }
+        }
+
+        if (st && st->BootServices) {
+            st->BootServices->FreePool(info);
+        }
+    }
+
+    if ((foundPreferred || found16By9) && bestMode != gop->Mode->Mode) {
+        if (EFI_ERROR(gop->SetMode(gop, bestMode))) {
+            if (st && st->ConOut) {
+                st->ConOut->OutputString(st->ConOut, (CHAR16*)L"[iBoot] Warning: failed to switch GOP framebuffer mode\r\n");
+            }
+        }
+    }
+}
+}
+
 void KernelLoader::Print(EFI_SYSTEM_TABLE* st, const wchar_t* msg) {
     if (st && st->ConOut)
         st->ConOut->OutputString(st->ConOut, (CHAR16*)msg);
@@ -230,6 +290,7 @@ EFI_STATUS KernelLoader::LoadAndBoot(EFI_HANDLE ImageHandle,
     Framebuffer fb = {};
     EFI_GRAPHICS_OUTPUT_PROTOCOL* gop = nullptr;
     if (!EFI_ERROR(bs->LocateProtocol(&gEfiGraphicsOutputProtocolGuid, nullptr, (void**)&gop))) {
+        Prefer16By9Framebuffer(st, gop);
         EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE* mode = gop->Mode;
         fb.base              = (UINT64)mode->FrameBufferBase;
         fb.size              = (UINT64)mode->FrameBufferSize;

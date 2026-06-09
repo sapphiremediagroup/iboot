@@ -312,6 +312,7 @@ struct _LIST_ENTRY {
 #if defined (__cplusplus)
   #if defined (_MSC_EXTENSIONS)
 #define NULL  nullptr
+  #elif defined(__clang__)
   #else
 #define NULL  __null
   #endif
